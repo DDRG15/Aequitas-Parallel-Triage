@@ -1,0 +1,66 @@
+# Aequitas-Parallel-Triage — Safe Default Configuration
+# All values here are the canonical safe defaults.
+# Override per-environment via environment variables or a local override file.
+
+engine:
+  executor_mode: auto          # threaded | process | async-hybrid | auto
+  max_workers: 200
+  batch_size: 10000
+  task_timeout_s: 120          # wall-clock limit per task (before soft kill)
+
+dispatcher:
+  token_bucket_rate: 5000      # tokens (tasks) per second
+  token_bucket_burst: 10000    # maximum burst tokens
+  ingestion_queue_maxsize: 20000  # bounded; raises BackpressureError when full
+
+logging:
+  log_queue_size: 100000       # bounded QueueHandler queue depth
+  flush_interval_ms: 500       # max age of an unflushed batch
+  max_batch_bytes: 4194304     # 4 MiB; triggers early flush
+  # log_dir: set to a writable path for your platform.
+  # POSIX production: /var/log/aequitas
+  # Windows production: C:\ProgramData\aequitas\logs
+  # Default (auto): platform_compat.default_log_dir() => temp dir fallback
+  log_dir: /var/log/aequitas
+  max_bytes_per_file: 104857600   # 100 MiB RotatingFileHandler
+  backup_count: 10
+  backpressure_sample_rate: 0.1   # fraction of DEBUG/INFO retained under pressure
+
+memory:
+  memory_high_water_mb: 2048
+  gc_check_interval_batches: 10   # check RSS every N batches; trigger GC if over HWM
+
+subprocess:
+  soft_kill_timeout_s: 30
+  hard_kill_timeout_s: 60
+  stream_threshold_bytes: 1048576  # stdout > 1 MiB streams to tempfile
+  rlimit_cpu_s: 60
+  rlimit_as_mb: 1024
+
+escalation:
+  backend: redis               # redis | in_process | lock_sharded
+  redis_url: redis://localhost:6379/0
+  window_seconds: 60
+  bucket_count: 12             # 12 × 5-second buckets = 60-second window
+  bucket_ttl_s: 120            # Redis key TTL (2× window for safety)
+  error_threshold: 500         # escalate when sliding-window errors exceed this
+  circuit_breaker_base_delay_s: 1.0
+  circuit_breaker_max_delay_s: 60.0
+  circuit_breaker_jitter: 0.3
+
+container_pool:
+  mode: pooled                 # process | pooled | ephemeral | microvm
+  pool_size: 20
+  image: ubuntu:22.04
+  overlay_reset: true          # reset filesystem overlay between tasks
+  docker_create_timeout_ms: 200
+  checkout_timeout_s: 10
+
+metrics:
+  enabled: true
+  backend: prometheus          # prometheus | statsd | noop
+  push_gateway: http://localhost:9091
+  push_interval_s: 15
+  labels:
+    service: aequitas
+    env: production
